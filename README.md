@@ -1,7 +1,9 @@
 # match-histogram-node
-An InvokeAI node to match a histogram from one image to another.
+An InvokeAI node to match a histogram from one image to another.  This is a bit like the `color correct` node im main invoke but this works in the YCbCr colourspace and can handle images of different sizes
 - Option to only transfer luminance channels.
 - Option to save output as grayscale
+
+A good use case is normalise the colors of an image that has been through the tiled scaling workflow of my XYGrid Nodes. 
 
 ## Usage
 <ins>Install:</ins><BR>
