@@ -4,7 +4,8 @@ An InvokeAI node to match a histogram from one image to another.
 - Option to save output as grayscale
 
 ## Usage
-Install: There are two options for installing these nodes. (Option 1 is the recommended option) 
+<ins>Install:</ins><BR>
+There are two options for installing these nodes. (Option 1 is the recommended option) 
 1. Git clone the repo into the `invokeai/nodes` directory. (**Recommended** - as it allows updating via a git pull)
     - open a command prompt/terminal in the invokeAI nodes directory ( or choose `8. Open the developer console` option from the invoke.bat then `cd nodes`)
     - run `git clone https://github.com/skunkworxdark/match_histogram.git`
