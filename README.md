@@ -12,9 +12,9 @@ There are two options for installing these nodes. (Option 1 is the recommended o
 2. Manually download and place [match_histogram.py](match_histogram.py) & [__init__.py](__init__.py) in a sub folder in the `invokeai/nodes` folder.
 
 <ins>Update:</ins><BR>
-Run a `git pull` from the `XYGrid_nodes` folder. Or run the `update.bat` or `update.sh` that is in the `invokeai/nodes/match_histogram` folder. If you installed it manually then the only option is to monitor the repo or discord channel and manually download and replace the file yourself.
+Run a `git pull` from the `match_histogram` folder. Or run the `update.bat` or `update.sh` that is in the `invokeai/nodes/match_histogram` folder. If you installed it manually then the only option is to monitor the repo or discord channel and manually download and replace the file yourself.
 
 <ins>Remove:</ins><BR>
-Simply delete the `XYGrid_nodes` folder or you can rename it by adding an underscore `_`XYGrid_nodes` and Invoke will ignore it.
+Simply delete the `match_histogram` folder or you can rename it by adding an underscore `_`XYGrid_nodes` and Invoke will ignore it.
 
 ![image](https://github.com/skunkworxdark/match_histogram/assets/21961335/ed12f329-a0ef-444a-9bae-129ed60d6097)
