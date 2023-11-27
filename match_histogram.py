@@ -40,7 +40,7 @@ def hist_match(source, template):
     t_quantiles /= t_quantiles[-1]  # Normalize the CDF of the template image
 
     # Interpolate pixel values of the source image based on matching CDFs
-    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
+    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values).astype(int)
 
     return interp_t_values[bin_idx].reshape(source_shape)
 
@@ -72,17 +72,17 @@ class MatchHistogramInvocation(BaseInvocation, WithWorkflow, WithMetadata):
         source = context.services.images.get_pil_image(self.image.image_name)
         reference = context.services.images.get_pil_image(self.reference_image.image_name)
 
-        # Check if the source and reference images are colored
-        source_is_rgb = source.mode == "RGB" or source.mode == "RGBA"
-        reference_is_rgb = reference.mode == "RGB" or reference.mode == "RGBA"
-
         source_has_alpha = source.mode == 'RGBA'
         if source_has_alpha:
             source_alpha = source.split()[3]
 
+        # Check if the source and reference images are colored
+        source_is_rgb = source.mode == "RGB" or source.mode == "RGBA"
+        reference_is_rgb = reference.mode == "RGB" or reference.mode == "RGBA"
+
         # Convert the source and template images to 'YCbCr' if they are colored, 'L' otherwise
         source_yuv = source.convert("YCbCr") if source_is_rgb else source.convert("L")
-        reference_yuv = source.convert("YCbCr") if reference_is_rgb else source.convert("L")
+        reference_yuv = reference.convert("YCbCr") if reference_is_rgb else reference.convert("L")
 
         # Split the source and template images into their respective channels
         source_channels = source_yuv.split()
