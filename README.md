@@ -3,6 +3,9 @@ An InvokeAI node to match a histogram from one image to another.
 - Option to only transfer luminance channels.
 - Option to save output as grayscale
 
+![image](https://github.com/skunkworxdark/match_histogram/assets/21961335/ed12f329-a0ef-444a-9bae-129ed60d6097)
+
+
 ## Usage
 <ins>Install:</ins><BR>
 There are two options for installing these nodes. (Option 1 is the recommended option) 
