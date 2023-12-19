@@ -11,7 +11,7 @@ There are two options for installing these nodes. (Option 1 is the recommended o
 1. Git clone the repo into the `invokeai/nodes` directory. (**Recommended** - as it allows updating via a git pull)
     - open a command prompt/terminal in the invokeAI nodes directory ( or choose `8. Open the developer console` option from the invoke.bat then `cd nodes`)
     - run `git clone https://github.com/skunkworxdark/match_histogram.git`
-2. Manually download and place [match_histogram.py](match_histogram.py) & [__init__.py](__init__.py) in a sub folder in the `invokeai/nodes` folder.
+2. Manually download and place [match_histogram.py](match_histogram.py) & [__init__.py](__init__.py) in a subfolder in the `invokeai/nodes` folder.
 
 <ins>Update:</ins><BR>
 Run a `git pull` from the `match_histogram` folder. Or run the `update.bat` or `update.sh` that is in the `invokeai/nodes/match_histogram` folder. If you installed it manually then the only option is to monitor the repo or discord channel and manually download and replace the file yourself.

@@ -12,7 +12,6 @@ from invokeai.app.invocations.baseinvocation import (
     InputField,
     InvocationContext,
     WithMetadata,
-    WithWorkflow,
     invocation,
 )
 from invokeai.app.invocations.primitives import (
@@ -52,7 +51,7 @@ def hist_match(source, template):
     category="color",
     version="1.0.0",
 )
-class MatchHistogramInvocation(BaseInvocation, WithWorkflow, WithMetadata):
+class MatchHistogramInvocation(BaseInvocation, WithMetadata):
     """match a histogram from one image to another"""
 
     # Inputs
@@ -122,7 +121,7 @@ class MatchHistogramInvocation(BaseInvocation, WithWorkflow, WithMetadata):
             session_id=context.graph_execution_state_id,
             is_intermediate=self.is_intermediate,
             metadata=self.metadata,
-            workflow=self.workflow,
+            workflow=context.workflow,
         )
 
         return ImageOutput(
