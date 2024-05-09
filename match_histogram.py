@@ -5,15 +5,15 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from invokeai.app.invocations.baseinvocation import (
+from invokeai.invocation_api import (
     BaseInvocation,
-    InvocationContext,
-    invocation,
-)
-from invokeai.app.invocations.fields import InputField, WithBoard, WithMetadata
-from invokeai.app.invocations.primitives import (
     ImageField,
     ImageOutput,
+    InputField,
+    InvocationContext,
+    WithBoard,
+    WithMetadata,
+    invocation,
 )
 
 
@@ -50,7 +50,6 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
     """match a histogram from one image to another"""
 
     # Inputs
-    #    board: Optional[BoardField] = InputField(default=None, description=FieldDescriptions.board, input=Input.Direct)
     image: ImageField = InputField(description="The image to receive the histogram")
     reference_image: ImageField = InputField(description="The reference image with the source histogram")
     match_luminance_only: bool = InputField(
