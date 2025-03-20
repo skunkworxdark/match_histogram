@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 from PIL import Image
+from skimage import color as skcolor
 
 from invokeai.invocation_api import (
     BaseInvocation,
@@ -18,7 +19,6 @@ from invokeai.invocation_api import (
 
 
 def hist_match(source: np.ndarray[Any, Any], template: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
-    source_shape = source.shape
     # Flatten the source and template images
     source = source.ravel()
     template = template.ravel()
@@ -34,9 +34,12 @@ def hist_match(source: np.ndarray[Any, Any], template: np.ndarray[Any, Any]) -> 
     t_quantiles /= t_quantiles[-1]  # Normalize the CDF of the template image
 
     # Interpolate pixel values of the source image based on matching CDFs
-    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values).astype(int)
+    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
 
-    return interp_t_values[bin_idx].reshape(source_shape)
+    # Create the mapping array and reshape to original dimensions
+    mapped = interp_t_values[bin_idx].reshape(source.shape)
+
+    return mapped.astype(source.dtype)
 
 
 @invocation(
@@ -44,10 +47,10 @@ def hist_match(source: np.ndarray[Any, Any], template: np.ndarray[Any, Any]) -> 
     title="Match Histogram",
     tags=["histogram", "color", "image"],
     category="color",
-    version="1.1.0",
+    version="1.1.1",
 )
 class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
-    """match a histogram from one image to another"""
+    """Match a histogram from one image to another using YCbCr color space"""
 
     # Inputs
     image: ImageField = InputField(description="The image to receive the histogram")
@@ -102,6 +105,91 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
         else:
             output_image = matched_channels[0]
 
+        if source_has_alpha:
+            output_image.putalpha(source_alpha)
+
+        # Save the image
+        image_dto = context.images.save(output_image)
+
+        return ImageOutput.build(image_dto)
+
+
+@invocation(
+    "match_histogram_lab",
+    title="Match Histogram LAB",
+    tags=["histogram", "color", "image"],
+    category="color",
+    version="1.0.0",
+)
+class MatchHistogramLabInvocation(BaseInvocation, WithMetadata, WithBoard):
+    """Match a histogram from one image to another using Lab color space"""
+
+    # Inputs
+    image: ImageField = InputField(description="The image to receive the histogram")
+    reference_image: ImageField = InputField(description="The reference image with the source histogram")
+    match_luminance_only: bool = InputField(
+        default=False,
+        description="Only transfer the luminance/brightness channel",
+    )
+    output_grayscale: bool = InputField(
+        default=False,
+        description="Convert output image to grayscale",
+    )
+
+    def invoke(self, context: InvocationContext) -> ImageOutput:
+        source = context.images.get_pil(self.image.image_name)
+        reference = context.images.get_pil(self.reference_image.image_name)
+
+        # Check if source is luminance-only (grayscale)
+        source_is_luminance_only = source.mode == "L"
+
+        # Extract alpha channel if present
+        source_has_alpha = source.mode == "RGBA"
+        if source_has_alpha:
+            source_alpha = source.split()[3]
+
+        # Always convert to RGB first (unless source is luminance-only)
+        if source_is_luminance_only:
+            # For luminance-only source, convert reference to grayscale too
+            source_gray = source
+            reference_gray = reference.convert("L")
+
+            # Direct luminance-to-luminance histogram matching
+            output_array = hist_match(np.array(source_gray), np.array(reference_gray)).astype(np.uint8)
+
+            output_image = Image.fromarray(output_array, mode="L")
+        else:
+            # Regular color processing
+            source_rgb = source.convert("RGB")
+            reference_rgb = reference.convert("RGB")
+
+            # Convert to numpy arrays
+            source_np = np.array(source_rgb)
+            reference_np = np.array(reference_rgb)
+
+            # Convert to LAB color space
+            source_channels = skcolor.rgb2lab(source_np)
+            reference_channels = skcolor.rgb2lab(reference_np)
+
+            # Process each channel
+            for i in range(3):
+                # Only process first channel (luminance) or if matching all channels
+                if i == 0 or not self.match_luminance_only:
+                    source_channels[:, :, i] = hist_match(source_channels[:, :, i], reference_channels[:, :, i])
+
+            # Convert back to RGB
+            matched_rgb = skcolor.lab2rgb(source_channels)
+            np.clip(matched_rgb, 0, 1)
+
+            # Convert to 8-bit and create PIL image
+            matched_rgb_8bit = (matched_rgb * 255).astype(np.uint8)
+            output_image = Image.fromarray(matched_rgb_8bit, mode="RGB")
+
+            # Convert to grayscale if requested or if source was grayscale
+            if self.output_grayscale:
+                output_image = output_image.convert("L")
+
+        # Restore alpha channel if present in source
         if source_has_alpha:
             output_image.putalpha(source_alpha)
 
