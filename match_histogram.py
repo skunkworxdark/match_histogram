@@ -20,12 +20,12 @@ from invokeai.invocation_api import (
 
 def hist_match(source: np.ndarray[Any, Any], template: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     # Flatten the source and template images
-    source = source.ravel()
-    template = template.ravel()
+    source_flat = source.ravel()
+    template_flat = template.ravel()
 
     # Get the set of unique pixel values and their corresponding indices and counts
-    _, bin_idx, s_counts = np.unique(source, return_inverse=True, return_counts=True)
-    t_values, t_counts = np.unique(template, return_counts=True)
+    _, bin_idx, s_counts = np.unique(source_flat, return_inverse=True, return_counts=True)
+    t_values, t_counts = np.unique(template_flat, return_counts=True)
 
     # Calculate the cumulative distribution function (CDF) of the source and template images
     s_quantiles = np.cumsum(s_counts).astype(np.float64)
