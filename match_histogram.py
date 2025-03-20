@@ -68,9 +68,8 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
         source = context.images.get_pil(self.image.image_name)
         reference = context.images.get_pil(self.reference_image.image_name)
 
-        source_has_alpha = source.mode == "RGBA"
-        if source_has_alpha:
-            source_alpha = source.split()[3]
+        # Extract alpha channel if present
+        source_alpha = source.split()[3] if source.mode == "RGBA" else None
 
         # Check if the source and reference images are colored
         source_is_rgb = source.mode == "RGB" or source.mode == "RGBA"
@@ -105,7 +104,7 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
         else:
             output_image = matched_channels[0]
 
-        if source_has_alpha:
+        if source_alpha is not None:
             output_image.putalpha(source_alpha)
 
         # Save the image
@@ -144,9 +143,7 @@ class MatchHistogramLabInvocation(BaseInvocation, WithMetadata, WithBoard):
         source_is_luminance_only = source.mode == "L"
 
         # Extract alpha channel if present
-        source_has_alpha = source.mode == "RGBA"
-        if source_has_alpha:
-            source_alpha = source.split()[3]
+        source_alpha = source.split()[3] if source.mode == "RGBA" else None
 
         # Always convert to RGB first (unless source is luminance-only)
         if source_is_luminance_only:
@@ -190,7 +187,7 @@ class MatchHistogramLabInvocation(BaseInvocation, WithMetadata, WithBoard):
                 output_image = output_image.convert("L")
 
         # Restore alpha channel if present in source
-        if source_has_alpha:
+        if source_alpha is not None:
             output_image.putalpha(source_alpha)
 
         # Save the image
