@@ -1,10 +1,11 @@
 # 2024 skunkworxdark (https://github.com/skunkworxdark)
+# Updated 2025-04-13 to use OpenCV instead of scikit-image for LAB conversion
 
 from typing import Any
 
+import cv2
 import numpy as np
 from PIL import Image
-from skimage import color as skcolor
 
 from invokeai.invocation_api import (
     BaseInvocation,
@@ -19,6 +20,7 @@ from invokeai.invocation_api import (
 
 
 def hist_match(source: np.ndarray[Any, Any], template: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
+    """Matches the histogram of the source image to the template image."""
     # Flatten the source and template images
     source_flat = source.ravel()
     template_flat = template.ravel()
@@ -44,10 +46,10 @@ def hist_match(source: np.ndarray[Any, Any], template: np.ndarray[Any, Any]) -> 
 
 @invocation(
     "match_histogram",
-    title="Match Histogram",
+    title="Match Histogram (YCbCr)",
     tags=["histogram", "color", "image"],
     category="color",
-    version="1.1.1",
+    version="1.1.2",
 )
 class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
     """Match a histogram from one image to another using YCbCr color space"""
@@ -57,11 +59,11 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
     reference_image: ImageField = InputField(description="The reference image with the source histogram")
     match_luminance_only: bool = InputField(
         default=False,
-        description="only transfer the luminance",
+        description="Only transfer the luminance",
     )
     output_grayscale: bool = InputField(
         default=False,
-        description="convert output image to grayscale",
+        description="Convert output image to grayscale",
     )
 
     def invoke(self, context: InvocationContext) -> ImageOutput:
@@ -69,7 +71,7 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
         reference = context.images.get_pil(self.reference_image.image_name)
 
         # Extract alpha channel if present
-        source_alpha = source.split()[3] if source.mode == "RGBA" else None
+        source_alpha = source.split()[-1] if source.mode == "RGBA" else None
 
         # Check if the source and reference images are colored
         source_is_rgb = source.mode == "RGB" or source.mode == "RGBA"
@@ -80,32 +82,61 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
         reference_yuv = reference.convert("YCbCr") if reference_is_rgb else reference.convert("L")
 
         # Split the source and template images into their respective channels
-        source_channels = source_yuv.split()
-        reference_channels = reference_yuv.split()
+        source_channels_pil = list(source_yuv.split())
+        reference_channels_pil = list(reference_yuv.split())
 
         # Match the histograms of the source and template images
         matched_channels: list[Image.Image] = []
-        for i in range(len(source_channels)):
-            # If matching only the luminance channel or the template image is grayscale, leave the chrominance channels unchanged
+        num_source_channels = len(source_channels_pil)
+        num_ref_channels = len(reference_channels_pil)
+
+        for i in range(num_source_channels):
+            # If matching only the luminance channel or the template image is grayscale,
+            # leave the chrominance channels unchanged (if they exist)
             if (self.match_luminance_only or not reference_is_rgb) and source_is_rgb and i > 0:
-                matched_channels.append(source_channels[i])
+                matched_channels.append(source_channels_pil[i])
             else:
-                # Match the histogram of the current channel of the source image to that of the template image
-                matched_channel = Image.fromarray(
-                    hist_match(np.array(source_channels[i]), np.array(reference_channels[i])).astype("uint8"), "L"
-                )
-                matched_channels.append(matched_channel)
+                # Ensure reference channel exists (handles color -> grayscale matching)
+                ref_channel_idx = min(i, num_ref_channels - 1)
+
+                # Convert PIL channels to NumPy arrays for hist_match
+                source_arr = np.array(source_channels_pil[i])
+                ref_arr = np.array(reference_channels_pil[ref_channel_idx])
+
+                # Match the histogram
+                matched_arr = hist_match(source_arr, ref_arr)
+
+                # Convert back to PIL Image (ensure uint8 for L mode)
+                matched_channel_pil = Image.fromarray(matched_arr.astype("uint8"), "L")
+                matched_channels.append(matched_channel_pil)
 
         # Merge the matched channels to get the output image
         if source_is_rgb:
-            output_image = Image.merge("YCbCr", matched_channels).convert("RGB")
+            # Ensure we have 3 channels to merge for YCbCr
+            while len(matched_channels) < 3:
+                # This case should ideally not happen if source_is_rgb is true,
+                # but as a fallback, append original Cb/Cr or default gray
+                if len(source_channels_pil) > len(matched_channels):
+                    matched_channels.append(source_channels_pil[len(matched_channels)])
+                else:  # Fallback if original source wasn't 3 channels (e.g., LA)
+                    matched_channels.append(Image.new("L", source_channels_pil[0].size, 128))
+
+            output_image = Image.merge("YCbCr", matched_channels[:3]).convert("RGB")  # Use first 3
+
             if self.output_grayscale:
                 output_image = output_image.convert("L")
-        else:
+        else:  # Source was Grayscale ('L')
             output_image = matched_channels[0]
 
+        # Restore alpha channel if present in source
         if source_alpha is not None:
-            output_image.putalpha(source_alpha)
+            if output_image.mode == "L":
+                output_image = output_image.convert("LA")  # Add alpha
+                output_image.putalpha(source_alpha)
+            elif output_image.mode == "RGB":
+                output_image = output_image.convert("RGBA")  # Add alpha
+                output_image.putalpha(source_alpha)
+            # else leave as is (e.g. if already RGBA - though unlikely here)
 
         # Save the image
         image_dto = context.images.save(output_image)
@@ -118,7 +149,7 @@ class MatchHistogramInvocation(BaseInvocation, WithMetadata, WithBoard):
     title="Match Histogram LAB",
     tags=["histogram", "color", "image"],
     category="color",
-    version="1.0.0",
+    version="1.1.0",
 )
 class MatchHistogramLabInvocation(BaseInvocation, WithMetadata, WithBoard):
     """Match a histogram from one image to another using Lab color space"""
@@ -143,52 +174,83 @@ class MatchHistogramLabInvocation(BaseInvocation, WithMetadata, WithBoard):
         source_is_luminance_only = source.mode == "L"
 
         # Extract alpha channel if present
-        source_alpha = source.split()[3] if source.mode == "RGBA" else None
+        source_alpha = source.split()[-1] if source.mode == "RGBA" else None
 
-        # Always convert to RGB first (unless source is luminance-only)
+        # Always convert to RGB first for color processing or reference
+        source_rgb = source.convert("RGB")
+        reference_rgb = reference.convert("RGB")  # Also convert reference for consistency
+
+        # Convert to numpy arrays (uint8, 0-255)
+        source_np_rgb = np.array(source_rgb)
+        reference_np_rgb = np.array(reference_rgb)
+
         if source_is_luminance_only:
-            # For luminance-only source, convert reference to grayscale too
-            source_gray = source
-            reference_gray = reference.convert("L")
+            # Special handling if the original source image was grayscale
+            # We match its L channel to the L channel of the reference's LAB version
 
-            # Direct luminance-to-luminance histogram matching
-            output_array = hist_match(np.array(source_gray), np.array(reference_gray)).astype(np.uint8)
+            # Convert reference to LAB
+            ref_np_float = reference_np_rgb.astype(np.float32) / 255.0
+            ref_lab = cv2.cvtColor(ref_np_float, cv2.COLOR_RGB2Lab)
 
+            # Get source L channel (already grayscale) and reference L* channel
+            source_l_channel = source_np_rgb[:, :, 0]  # It's RGB but all channels are the same
+            ref_l_channel = ref_lab[:, :, 0]
+
+            # Match histograms for the L channel
+            matched_l_channel = hist_match(source_l_channel, ref_l_channel)
+
+            # Output is grayscale
+            output_array = matched_l_channel.astype(np.uint8)
             output_image = Image.fromarray(output_array, mode="L")
+
         else:
-            # Regular color processing
-            source_rgb = source.convert("RGB")
-            reference_rgb = reference.convert("RGB")
+            # Regular color processing (source was RGB or RGBA)
 
-            # Convert to numpy arrays
-            source_np = np.array(source_rgb)
-            reference_np = np.array(reference_rgb)
+            # Convert source and reference RGB to LAB (float32)
+            # OpenCV expects float32 input in range [0, 1] for RGB->Lab
+            source_np_float = source_np_rgb.astype(np.float32) / 255.0
+            reference_np_float = reference_np_rgb.astype(np.float32) / 255.0
 
-            # Convert to LAB color space
-            source_channels = skcolor.rgb2lab(source_np)
-            reference_channels = skcolor.rgb2lab(reference_np)
+            source_lab = cv2.cvtColor(source_np_float, cv2.COLOR_RGB2Lab)
+            reference_lab = cv2.cvtColor(reference_np_float, cv2.COLOR_RGB2Lab)
 
-            # Process each channel
-            for i in range(3):
-                # Only process first channel (luminance) or if matching all channels
-                if i == 0 or not self.match_luminance_only:
-                    source_channels[:, :, i] = hist_match(source_channels[:, :, i], reference_channels[:, :, i])
+            # Match histograms channel by channel
+            # OpenCV LAB channels: L* (0-100), a* (-127-127), b* (-127-127) approx
+            matched_lab = np.copy(source_lab)  # Start with a copy of source LAB
+
+            # Match L* channel
+            matched_lab[:, :, 0] = hist_match(source_lab[:, :, 0], reference_lab[:, :, 0])
+
+            # Match a* and b* channels if not luminance only
+            if not self.match_luminance_only:
+                matched_lab[:, :, 1] = hist_match(source_lab[:, :, 1], reference_lab[:, :, 1])
+                matched_lab[:, :, 2] = hist_match(source_lab[:, :, 2], reference_lab[:, :, 2])
 
             # Convert back to RGB
-            matched_rgb = skcolor.lab2rgb(source_channels)
-            np.clip(matched_rgb, 0, 1)
+            # cv2.COLOR_Lab2RGB expects float32 Lab input
+            matched_rgb_float = cv2.cvtColor(matched_lab.astype(np.float32), cv2.COLOR_Lab2RGB)
 
-            # Convert to 8-bit and create PIL image
-            matched_rgb_8bit = (matched_rgb * 255).astype(np.uint8)
+            # Clip values to [0, 1] range as conversion can sometimes slightly exceed bounds
+            matched_rgb_float_clipped = np.clip(matched_rgb_float, 0, 1)
+
+            # Convert back to 8-bit RGB (0-255)
+            matched_rgb_8bit = (matched_rgb_float_clipped * 255).astype(np.uint8)
             output_image = Image.fromarray(matched_rgb_8bit, mode="RGB")
 
-            # Convert to grayscale if requested or if source was grayscale
+            # Convert to grayscale if requested
             if self.output_grayscale:
                 output_image = output_image.convert("L")
 
         # Restore alpha channel if present in source
         if source_alpha is not None:
-            output_image.putalpha(source_alpha)
+            # Ensure output mode supports alpha before adding it
+            if output_image.mode == "L":
+                output_image = output_image.convert("LA")  # Add alpha
+                output_image.putalpha(source_alpha)
+            elif output_image.mode == "RGB":
+                output_image = output_image.convert("RGBA")  # Add alpha
+                output_image.putalpha(source_alpha)
+            # else leave as is (e.g. if already RGBA/LA)
 
         # Save the image
         image_dto = context.images.save(output_image)
